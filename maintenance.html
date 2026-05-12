@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AquaLog — Maintenance</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .main-grid { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
+    @media(max-width:900px) { .main-grid { grid-template-columns: 1fr; } }
+
+    .log-item {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 14px 0; border-bottom: 1px solid rgba(48,54,61,0.5);
+    }
+    .log-item:last-child { border-bottom: none; }
+    .log-type-badge {
+      flex-shrink: 0; padding: 4px 10px;
+      border-radius: 6px; font-size: 11px; font-weight: 700;
+      font-family: 'DM Mono', monospace;
+    }
+    .log-notes { font-size: 13px; color: var(--text2); }
+    .log-meta { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+    .reminder-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 14px; border-radius: var(--radius);
+      background: var(--bg3); border: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    .reminder-item.overdue { border-color: rgba(248,81,73,0.3); background: rgba(248,81,73,0.05); }
+    .reminder-check { font-size: 18px; cursor: pointer; flex-shrink: 0; }
+    .reminder-text { flex: 1; font-size: 13px; }
+    .reminder-due { font-size: 11px; color: var(--text3); }
+
+    .type-colors {
+      'Water Change': '#58a6ff',
+      'Filter Clean': '#3fb950',
+      'Gravel Vac': '#f0883e',
+      'Feeding': '#d29922',
+      'Dosing': '#bc8cff',
+      'Trimming': '#3fb950',
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <div id="nav-mount"></div>
+    <div class="main-content">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Maintenance</h1>
+          <p class="page-subtitle">Log tank upkeep and set reminders</p>
+        </div>
+      </div>
+      <div class="page-body">
+        <div id="no-tanks-msg" style="display:none" class="card">
+          <p style="font-size:14px;color:var(--text2)">No tanks found. <a href="tanks.html" style="color:var(--accent)">Add a tank first →</a></p>
+        </div>
+        <div class="main-grid" id="main-grid">
+          <!-- Left: Log form + Reminders -->
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card" style="display:flex;flex-direction:column;gap:14px">
+              <div style="font-family:'DM Serif Display',serif;font-size:18px">Log Activity</div>
+              <div class="form-group">
+                <label class="form-label">Tank *</label>
+                <select class="form-select" id="log-tank"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Type *</label>
+                <select class="form-select" id="log-type">
+                  <option>Water Change</option>
+                  <option>Filter Clean</option>
+                  <option>Gravel Vac</option>
+                  <option>Glass Clean</option>
+                  <option>Feeding</option>
+                  <option>Dosing</option>
+                  <option>Trimming</option>
+                  <option>Equipment Check</option>
+                  <option>Quarantine</option>
+                  <option>Treatment</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Date</label>
+                <input type="date" class="form-input" id="log-date">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea class="form-textarea" id="log-notes" placeholder="Details, amounts, observations..."></textarea>
+              </div>
+              <button class="btn btn-primary" onclick="submitLog()" style="width:100%;justify-content:center">Log Activity</button>
+            </div>
+
+            <!-- Reminders -->
+            <div class="card" style="display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="font-family:'DM Serif Display',serif;font-size:18px">Reminders</div>
+                <button class="btn btn-secondary btn-sm" onclick="openReminderModal()">+ Add</button>
+              </div>
+              <div id="reminders-list"></div>
+            </div>
+          </div>
+
+          <!-- Right: Log history -->
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="font-weight:600;font-size:14px">Activity Log</div>
+              <select class="form-select select-compact" id="filter-tank" style="padding:6px 10px;font-size:13px">
+                <option value="">All Tanks</option>
+              </select>
+            </div>
+            <div class="card" id="logs-card">
+              <div id="logs-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reminder Modal -->
+  <div class="modal-overlay" id="reminder-modal">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <h2 class="modal-title">New Reminder</h2>
+        <button class="btn-icon" onclick="closeReminderModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Reminder</label>
+          <input type="text" class="form-input" id="rem-text" placeholder="e.g. Weekly water change">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Due Date</label>
+          <input type="date" class="form-input" id="rem-due">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tank (optional)</label>
+          <select class="form-select" id="rem-tank">
+            <option value="">All / General</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeReminderModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveReminder()">Save Reminder</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="nav.js"></script>
+  <script>
+    if (!AquaDB.requireAuth()) throw '';
+    document.getElementById('nav-mount').innerHTML = renderNav('maintenance');
+
+    document.getElementById('log-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('rem-due').value = new Date().toISOString().split('T')[0];
+
+    const urlTank = new URLSearchParams(location.search).get('tank');
+
+    const typeColors = {
+      'Water Change': '#58a6ff', 'Filter Clean': '#3fb950',
+      'Gravel Vac': '#f0883e', 'Glass Clean': '#6e7681',
+      'Feeding': '#d29922', 'Dosing': '#bc8cff',
+      'Trimming': '#3fb950', 'Equipment Check': '#58a6ff',
+      'Quarantine': '#f85149', 'Treatment': '#f85149', 'Other': '#6e7681'
+    };
+
+    function init() {
+      const tanks = AquaDB.getTanks();
+      if (tanks.length === 0) {
+        document.getElementById('no-tanks-msg').style.display = 'block';
+        document.getElementById('main-grid').style.display = 'none';
+        return;
+      }
+
+      const opts = tanks.map(t => `<option value="${t.id}" ${t.id === urlTank ? 'selected' : ''}>${t.name}</option>`).join('');
+      document.getElementById('log-tank').innerHTML = opts;
+
+      const filterOpts = `<option value="">All Tanks</option>` + tanks.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+      document.getElementById('filter-tank').innerHTML = filterOpts;
+
+      document.getElementById('rem-tank').innerHTML = `<option value="">All / General</option>` + tanks.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+
+      if (urlTank) document.getElementById('filter-tank').value = urlTank;
+
+      renderLogs();
+      renderReminders();
+    }
+
+    function renderLogs() {
+      const filterTankId = document.getElementById('filter-tank').value;
+      const tanks = AquaDB.getTanks();
+      const tankMap = Object.fromEntries(tanks.map(t => [t.id, t]));
+      let logs = AquaDB.getLogs();
+      if (filterTankId) logs = logs.filter(l => l.tankId === filterTankId);
+
+      const list = document.getElementById('logs-list');
+      if (logs.length === 0) {
+        list.innerHTML = `<div class="empty-state" style="padding:40px 20px"><div class="empty-icon">📋</div><div class="empty-title">No logs yet</div><div class="empty-desc">Start logging maintenance to track your tank's history.</div></div>`;
+        return;
+      }
+
+      list.innerHTML = logs.map(l => {
+        const color = typeColors[l.type] || '#6e7681';
+        return `
+          <div class="log-item">
+            <div>
+              <div class="log-type-badge" style="background:${color}18;color:${color};border:1px solid ${color}30">${l.type}</div>
+            </div>
+            <div style="flex:1">
+              <div class="log-notes">${l.notes || '—'}</div>
+              <div class="log-meta">${tankMap[l.tankId]?.name || 'Deleted'} · ${AquaDB.formatDate(l.date)}</div>
+            </div>
+            <button onclick="deleteLog('${l.id}')" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:4px;opacity:0.5;transition:opacity 0.15s" onmouseover="this.style.opacity=1;this.style.color='var(--danger)'" onmouseout="this.style.opacity=0.5;this.style.color='var(--text3)'">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+            </button>
+          </div>`;
+      }).join('');
+    }
+
+    function renderReminders() {
+      const reminders = AquaDB.getReminders();
+      const list = document.getElementById('reminders-list');
+
+      if (reminders.length === 0) {
+        list.innerHTML = `<p style="font-size:13px;color:var(--text3);text-align:center;padding:16px">No reminders set.</p>`;
+        return;
+      }
+
+      const now = new Date();
+      list.innerHTML = reminders.map(r => {
+        const due = new Date(r.dueDate);
+        const overdue = !r.done && due <= now;
+        return `
+          <div class="reminder-item ${overdue ? 'overdue' : ''}">
+            <span class="reminder-check" onclick="toggleReminder('${r.id}')">${r.done ? '✅' : '⬜'}</span>
+            <div style="flex:1">
+              <div class="reminder-text" style="${r.done ? 'text-decoration:line-through;color:var(--text3)' : ''}">${r.text}</div>
+              <div class="reminder-due">${overdue ? '⚠ Overdue · ' : ''}Due ${AquaDB.formatDate(r.dueDate)}</div>
+            </div>
+            <button onclick="deleteReminder('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px">✕</button>
+          </div>`;
+      }).join('');
+    }
+
+    function submitLog() {
+      const tankId = document.getElementById('log-tank').value;
+      if (!tankId) { toast('Select a tank.', 'err'); return; }
+      AquaDB.addLog({
+        tankId,
+        type: document.getElementById('log-type').value,
+        date: document.getElementById('log-date').value || new Date().toISOString(),
+        notes: document.getElementById('log-notes').value.trim(),
+      });
+      document.getElementById('log-notes').value = '';
+      toast('Activity logged.');
+      renderLogs();
+    }
+
+    function deleteLog(id) {
+      if (!confirm('Delete this log entry?')) return;
+      AquaDB.deleteLog(id);
+      renderLogs();
+    }
+
+    function openReminderModal() { document.getElementById('reminder-modal').classList.add('open'); }
+    function closeReminderModal() { document.getElementById('reminder-modal').classList.remove('open'); }
+
+    function saveReminder() {
+      const text = document.getElementById('rem-text').value.trim();
+      const due = document.getElementById('rem-due').value;
+      if (!text || !due) { toast('Text and due date required.', 'err'); return; }
+      AquaDB.addReminder({ text, dueDate: due, tankId: document.getElementById('rem-tank').value, done: false });
+      closeReminderModal();
+      document.getElementById('rem-text').value = '';
+      renderReminders();
+      toast('Reminder set.');
+    }
+
+    function toggleReminder(id) {
+      const reminders = AquaDB.getReminders().map(r => r.id === id ? { ...r, done: !r.done } : r);
+      AquaDB.saveReminders(reminders);
+      renderReminders();
+    }
+
+    function deleteReminder(id) {
+      AquaDB.deleteReminder(id);
+      renderReminders();
+    }
+
+    document.getElementById('filter-tank').addEventListener('change', renderLogs);
+
+    init();
+  </script>
+</body>
+</html>

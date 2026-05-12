@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AquaLog — Settings</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .settings-layout { max-width: 640px; display: flex; flex-direction: column; gap: 20px; }
+    .settings-section { display: flex; flex-direction: column; gap: 14px; }
+    .settings-section-title { font-family: 'DM Serif Display', serif; font-size: 18px; margin-bottom: 4px; }
+    .settings-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; background: var(--bg3);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      gap: 12px; flex-wrap: wrap;
+    }
+    .settings-row-label { font-size: 14px; font-weight: 500; }
+    .settings-row-desc { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+    .stat-pair { display: flex; gap: 12px; flex-wrap: wrap; }
+    .stat-pill {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 18px;
+      text-align: center; flex: 1; min-width: 80px;
+    }
+    .stat-pill-num { font-family: 'DM Mono', monospace; font-size: 24px; color: var(--text); }
+    .stat-pill-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <div id="nav-mount"></div>
+    <div class="main-content">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Settings</h1>
+          <p class="page-subtitle">Account and data management</p>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="settings-layout">
+
+          <!-- Account -->
+          <div class="card">
+            <div class="settings-section">
+              <div class="settings-section-title">Account</div>
+              <div class="settings-row">
+                <div>
+                  <div class="settings-row-label" id="user-name-display">—</div>
+                  <div class="settings-row-desc" id="user-email-display">—</div>
+                </div>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-secondary btn-sm" onclick="openNameModal()">Edit Name</button>
+                  <button class="btn btn-danger btn-sm" onclick="confirmLogout()">Sign Out</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Data Stats -->
+          <div class="card">
+            <div class="settings-section">
+              <div class="settings-section-title">Your Data</div>
+              <div class="stat-pair" id="stats-row"></div>
+            </div>
+          </div>
+
+          <!-- Export/Import -->
+          <div class="card">
+            <div class="settings-section">
+              <div class="settings-section-title">Backup & Restore</div>
+              <div class="settings-row">
+                <div>
+                  <div class="settings-row-label">Export Data</div>
+                  <div class="settings-row-desc">Download all your data as a JSON file</div>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="AquaDB.exportData();toast('Data exported.')">Export JSON</button>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <div class="settings-row-label">Import Data</div>
+                  <div class="settings-row-desc">Restore from a previous AquaLog export</div>
+                </div>
+                <label class="btn btn-secondary btn-sm" style="cursor:pointer">
+                  Import JSON
+                  <input type="file" accept=".json" style="display:none" onchange="importData(this)">
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Danger Zone -->
+          <div class="card" style="border-color:rgba(248,81,73,0.2)">
+            <div class="settings-section">
+              <div class="settings-section-title" style="color:var(--danger)">Danger Zone</div>
+              <div class="settings-row" style="border-color:rgba(248,81,73,0.2)">
+                <div>
+                  <div class="settings-row-label">Clear All Data</div>
+                  <div class="settings-row-desc">Permanently delete all tanks, tests, logs, and livestock</div>
+                </div>
+                <button class="btn btn-danger btn-sm" onclick="clearAllData()">Clear All Data</button>
+              </div>
+            </div>
+          </div>
+
+          <p style="font-size:12px;color:var(--text3);text-align:center">
+            AquaLog v1.0 · All data stored locally in your browser · No account server
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Name Modal -->
+  <div class="modal-overlay" id="name-modal">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <h2 class="modal-title">Edit Display Name</h2>
+        <button class="btn-icon" onclick="closeNameModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Display Name</label>
+          <input type="text" class="form-input" id="new-name">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeNameModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveName()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="nav.js"></script>
+  <script>
+    if (!AquaDB.requireAuth()) throw '';
+    document.getElementById('nav-mount').innerHTML = renderNav('settings');
+
+    function loadInfo() {
+      const user = AquaDB.getUser();
+      document.getElementById('user-name-display').textContent = user?.name || '—';
+      document.getElementById('user-email-display').textContent = user?.email || '—';
+
+      document.getElementById('stats-row').innerHTML = [
+        { num: AquaDB.getTanks().length, label: 'Tanks' },
+        { num: AquaDB.getTests().length, label: 'Tests' },
+        { num: AquaDB.getLogs().length, label: 'Logs' },
+        { num: AquaDB.getLivestock().length, label: 'Species' },
+      ].map(s => `
+        <div class="stat-pill">
+          <div class="stat-pill-num">${s.num}</div>
+          <div class="stat-pill-label">${s.label}</div>
+        </div>`).join('');
+    }
+
+    function openNameModal() {
+      document.getElementById('new-name').value = AquaDB.getUser()?.name || '';
+      document.getElementById('name-modal').classList.add('open');
+    }
+    function closeNameModal() { document.getElementById('name-modal').classList.remove('open'); }
+
+    function saveName() {
+      const name = document.getElementById('new-name').value.trim();
+      if (!name) { toast('Name cannot be empty.', 'err'); return; }
+      const user = AquaDB.getUser();
+      user.name = name;
+      AquaDB.setUser(user);
+      // Also update in users list
+      const users = JSON.parse(localStorage.getItem('aqualog_users') || '[]');
+      const idx = users.findIndex(u => u.email === user.email);
+      if (idx !== -1) { users[idx].name = name; localStorage.setItem('aqualog_users', JSON.stringify(users)); }
+      closeNameModal();
+      loadInfo();
+      document.getElementById('nav-mount').innerHTML = renderNav('settings');
+      toast('Name updated.');
+    }
+
+    function confirmLogout() {
+      if (confirm('Sign out?')) AquaDB.logout();
+    }
+
+    function importData(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const success = AquaDB.importData(e.target.result);
+        if (success) { toast('Data imported successfully.'); loadInfo(); }
+        else toast('Import failed. Invalid file.', 'err');
+      };
+      reader.readAsText(file);
+    }
+
+    function clearAllData() {
+      if (!confirm('This will delete ALL your data permanently. Are you sure?')) return;
+      if (!confirm('Are you absolutely sure? This cannot be undone.')) return;
+      ['aqualog_tanks','aqualog_tests','aqualog_logs','aqualog_livestock','aqualog_reminders'].forEach(k => localStorage.removeItem(k));
+      toast('All data cleared.');
+      loadInfo();
+    }
+
+    loadInfo();
+  </script>
+</body>
+</html>

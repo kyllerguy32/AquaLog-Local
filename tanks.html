@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AquaLog — My Tanks</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <div id="nav-mount"></div>
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">My Tanks</h1>
+          <p class="page-subtitle">Create, update, and remove aquariums without leaving the page.</p>
+        </div>
+        <div class="quick-actions" style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="seedExample()">Load Example</button>
+          <button class="btn btn-primary" onclick="openTankModal()">Add Tank</button>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <div id="tank-summary" class="grid-4" style="margin-bottom:18px"></div>
+        <div id="tank-empty" class="card" style="display:none">
+          <div class="empty-state" style="padding:40px 20px">
+            <div class="empty-icon">🐠</div>
+            <div class="empty-title">No tanks yet</div>
+            <div class="empty-desc">Add your first aquarium to start tracking tests, livestock, and maintenance.</div>
+            <button class="btn btn-primary" onclick="openTankModal()">Add First Tank</button>
+          </div>
+        </div>
+        <div id="tank-grid" class="grid-2"></div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="tank-modal">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-header">
+        <h2 class="modal-title" id="tank-modal-title">Add Tank</h2>
+        <button class="btn-icon" onclick="closeTankModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="tank-id">
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Name</label>
+            <input class="form-input" id="tank-name" placeholder="Main Display Tank">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select class="form-select" id="tank-type">
+              <option>Freshwater</option>
+              <option>Saltwater</option>
+              <option>Brackish</option>
+              <option>Planted</option>
+              <option>Betta</option>
+              <option>Quarantine</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Volume</label>
+            <input class="form-input" id="tank-volume" type="number" min="0" step="0.1" placeholder="75">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unit</label>
+            <select class="form-select" id="tank-volume-unit">
+              <option>gal</option>
+              <option>L</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Temperature Unit</label>
+            <select class="form-select" id="tank-temp-unit">
+              <option>°F</option>
+              <option>°C</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Location</label>
+            <input class="form-input" id="tank-location" placeholder="Living room">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-textarea" id="tank-notes" placeholder="Stocking plan, filtration, aquascape notes..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeTankModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTank()">Save Tank</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="nav.js"></script>
+  <script>
+    if (!AquaDB.requireAuth()) throw '';
+    document.getElementById('nav-mount').innerHTML = renderNav('tanks');
+
+    let editingId = null;
+
+    function loadTanks() {
+      const tanks = AquaDB.getTanks();
+      const summary = document.getElementById('tank-summary');
+      const grid = document.getElementById('tank-grid');
+      document.getElementById('tank-empty').style.display = tanks.length ? 'none' : 'block';
+      grid.innerHTML = '';
+
+      summary.innerHTML = [
+        { label: 'Tanks', value: tanks.length },
+        { label: 'Tests', value: AquaDB.getTests().length },
+        { label: 'Livestock', value: AquaDB.getLivestock().length },
+        { label: 'Logs', value: AquaDB.getLogs().length },
+      ].map(item => `
+        <div class="card stat-card">
+          <div class="stat-label">${item.label}</div>
+          <div class="stat-value">${item.value}</div>
+        </div>
+      `).join('');
+
+      if (!tanks.length) return;
+
+      grid.innerHTML = tanks.map(t => {
+        const latest = AquaDB.getLatestTest(t.id);
+        const status = latest ? getTankStatus(latest) : 'badge-unknown';
+        return `
+          <section class="card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+              <div>
+                <div class="stat-label">${t.type || 'Aquarium'}</div>
+                <h2 style="font-family:'DM Serif Display',serif;font-size:24px;margin-top:4px">${t.name}</h2>
+                <p class="page-subtitle" style="margin-top:6px">${t.volume || '—'} ${t.volumeUnit || 'gal'} · ${t.location || 'No location set'}</p>
+              </div>
+              <span class="badge ${status}">${getTankLabel(latest)}</span>
+            </div>
+
+            <div class="grid-3" style="margin-top:20px">
+              ${metric('Temp', latest?.temp, t.tempUnit || '°F')}
+              ${metric('pH', latest?.ph, '')}
+              ${metric('Nitrate', latest?.nitrate, 'ppm')}
+            </div>
+
+            ${t.notes ? `<div class="card card-sm" style="margin-top:14px">${t.notes}</div>` : ''}
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+              <a class="btn btn-secondary btn-sm" href="dashboard.html">View Dashboard</a>
+              <a class="btn btn-secondary btn-sm" href="water-tests.html?tank=${t.id}">Log Test</a>
+              <a class="btn btn-secondary btn-sm" href="livestock.html?tank=${t.id}">Livestock</a>
+              <button class="btn btn-secondary btn-sm" onclick="editTank('${t.id}')">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteTank('${t.id}')">Delete</button>
+            </div>
+          </section>
+        `;
+      }).join('');
+    }
+
+    function metric(label, value, unit) {
+      return `
+        <div class="card card-sm" style="padding:14px">
+          <div class="stat-label">${label}</div>
+          <div class="stat-value" style="font-size:22px">${value ?? '—'}${unit ? `<span class="stat-unit"> ${unit}</span>` : ''}</div>
+        </div>
+      `;
+    }
+
+    function getTankStatus(test) {
+      if (!test) return 'badge-unknown';
+      const statuses = ['ph','ammonia','nitrate'].map(p => test[p] !== undefined ? AquaDB.getParamStatus(p, test[p]) : 'unknown');
+      if (statuses.includes('danger')) return 'badge-danger';
+      if (statuses.includes('warn')) return 'badge-warn';
+      return 'badge-ok';
+    }
+
+    function getTankLabel(test) {
+      if (!test) return 'No Data';
+      const statuses = ['ph','ammonia','nitrate'].map(p => test[p] !== undefined ? AquaDB.getParamStatus(p, test[p]) : 'unknown');
+      if (statuses.includes('danger')) return 'Alert';
+      if (statuses.includes('warn')) return 'Watch';
+      return 'Stable';
+    }
+
+    function openTankModal(tank = null) {
+      editingId = tank?.id || null;
+      document.getElementById('tank-modal-title').textContent = editingId ? 'Edit Tank' : 'Add Tank';
+      document.getElementById('tank-id').value = tank?.id || '';
+      document.getElementById('tank-name').value = tank?.name || '';
+      document.getElementById('tank-type').value = tank?.type || 'Freshwater';
+      document.getElementById('tank-volume').value = tank?.volume || '';
+      document.getElementById('tank-volume-unit').value = tank?.volumeUnit || 'gal';
+      document.getElementById('tank-temp-unit').value = tank?.tempUnit || '°F';
+      document.getElementById('tank-location').value = tank?.location || '';
+      document.getElementById('tank-notes').value = tank?.notes || '';
+      document.getElementById('tank-modal').classList.add('open');
+    }
+
+    function closeTankModal() {
+      document.getElementById('tank-modal').classList.remove('open');
+    }
+
+    function saveTank() {
+      const name = document.getElementById('tank-name').value.trim();
+      if (!name) { toast('Tank name is required.', 'err'); return; }
+
+      const data = {
+        name,
+        type: document.getElementById('tank-type').value,
+        volume: document.getElementById('tank-volume').value ? parseFloat(document.getElementById('tank-volume').value) : '',
+        volumeUnit: document.getElementById('tank-volume-unit').value,
+        tempUnit: document.getElementById('tank-temp-unit').value,
+        location: document.getElementById('tank-location').value.trim(),
+        notes: document.getElementById('tank-notes').value.trim(),
+      };
+
+      if (editingId) AquaDB.updateTank(editingId, data);
+      else AquaDB.addTank(data);
+
+      closeTankModal();
+      loadTanks();
+      toast(editingId ? 'Tank updated.' : 'Tank added.');
+    }
+
+    function editTank(id) {
+      openTankModal(AquaDB.getTank(id));
+    }
+
+    function deleteTank(id) {
+      const tank = AquaDB.getTank(id);
+      if (!tank) return;
+      if (!confirm(`Delete "${tank.name}" and all related tests, logs, and livestock?`)) return;
+      AquaDB.deleteTank(id);
+      loadTanks();
+      toast('Tank deleted.');
+    }
+
+    function seedExample() {
+      if (AquaDB.getTanks().length && !confirm('This will add example tanks alongside your current data. Continue?')) return;
+      AquaDB.addTank({ name: 'Main Display Tank', type: 'Freshwater', volume: 75, volumeUnit: 'gal', tempUnit: '°F', location: 'Living room', notes: 'Community tank with live plants.' });
+      AquaDB.addTank({ name: 'Nano Shrimp Cube', type: 'Planted', volume: 10, volumeUnit: 'gal', tempUnit: '°F', location: 'Office', notes: 'Low-tech shrimp and moss setup.' });
+      loadTanks();
+      toast('Example tanks added.');
+    }
+
+    loadTanks();
+  </script>
+</body>
+</html>

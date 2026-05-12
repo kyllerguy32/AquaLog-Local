@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AquaLog — Water Tests</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <div id="nav-mount"></div>
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Water Tests</h1>
+          <p class="page-subtitle">Record readings, filter by tank, and keep a clean audit trail of water chemistry.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openTestModal()">Log Test</button>
+      </div>
+
+      <div class="page-body">
+        <div id="test-summary" class="grid-4" style="margin-bottom:18px"></div>
+
+        <div class="card" style="margin-bottom:18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <div class="form-group" style="min-width:220px;flex:1">
+            <label class="form-label">Tank Filter</label>
+            <select class="form-select" id="tank-filter"></select>
+          </div>
+          <div class="form-group" style="min-width:160px">
+            <label class="form-label">Search</label>
+            <input class="form-input" id="search-input" placeholder="pH, ammonia, notes...">
+          </div>
+          <div style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" onclick="openTestModal()">New Reading</button>
+            <a class="btn btn-secondary btn-sm" href="dashboard.html">Dashboard</a>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <section class="card">
+            <div class="section-title" style="font-size:18px;margin-bottom:14px">Trend Snapshot</div>
+            <canvas id="trend-chart" height="180"></canvas>
+          </section>
+          <section class="card">
+            <div class="section-title" style="font-size:18px;margin-bottom:14px">Recent Status</div>
+            <div id="status-panel"></div>
+          </section>
+        </div>
+
+        <section class="card" style="margin-top:18px">
+          <div class="section-title" style="font-size:18px;margin-bottom:14px">Recent Readings</div>
+          <div id="test-empty" class="empty-state" style="display:none;padding:30px 20px">
+            <div class="empty-icon">🧪</div>
+            <div class="empty-title">No tests yet</div>
+            <div class="empty-desc">Log your first reading to start building history and parameter trends.</div>
+          </div>
+          <div id="test-list" style="display:flex;flex-direction:column;gap:10px"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="test-modal">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-header">
+        <h2 class="modal-title">Log Water Test</h2>
+        <button class="btn-icon" onclick="closeTestModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Tank</label>
+            <select class="form-select" id="test-tank"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input type="date" class="form-input" id="test-date">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group"><label class="form-label">pH</label><input class="form-input" id="test-ph" placeholder="7.2"></div>
+          <div class="form-group"><label class="form-label">Temperature</label><input class="form-input" id="test-temp" placeholder="78"></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group"><label class="form-label">Ammonia</label><input class="form-input" id="test-ammonia" placeholder="0.0"></div>
+          <div class="form-group"><label class="form-label">Nitrite</label><input class="form-input" id="test-nitrite" placeholder="0.0"></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group"><label class="form-label">Nitrate</label><input class="form-input" id="test-nitrate" placeholder="15"></div>
+          <div class="form-group"><label class="form-label">GH</label><input class="form-input" id="test-gh" placeholder="8"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-textarea" id="test-notes" placeholder="Cloudiness, livestock behavior, dosing, etc."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeTestModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTest()">Save Reading</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="nav.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>
+    if (!AquaDB.requireAuth()) throw '';
+    document.getElementById('nav-mount').innerHTML = renderNav('tests');
+
+    let chart = null;
+    const urlTank = new URLSearchParams(location.search).get('tank') || '';
+
+    function tankOptions(selected = '') {
+      const tanks = AquaDB.getTanks();
+      const options = ['<option value="">All Tanks</option>']
+        .concat(tanks.map(t => `<option value="${t.id}" ${t.id === selected ? 'selected' : ''}>${t.name}</option>`));
+      return options.join('');
+    }
+
+    function populateTankSelects() {
+      const current = document.getElementById('tank-filter').value || urlTank;
+      document.getElementById('tank-filter').innerHTML = tankOptions(current);
+      document.getElementById('test-tank').innerHTML = AquaDB.getTanks().map(t => `<option value="${t.id}" ${t.id === current ? 'selected' : ''}>${t.name}</option>`).join('');
+      if (urlTank) document.getElementById('tank-filter').value = urlTank;
+    }
+
+    function loadTests() {
+      const tanks = AquaDB.getTanks();
+      populateTankSelects();
+
+      const tests = getFilteredTests();
+      document.getElementById('test-summary').innerHTML = [
+        { label: 'Tests', value: AquaDB.getTests().length },
+        { label: 'Overdue Alerts', value: AquaDB.getDueReminders().length },
+        { label: 'Tanks', value: tanks.length },
+        { label: 'Filtered', value: tests.length },
+      ].map(item => `
+        <div class="card stat-card">
+          <div class="stat-label">${item.label}</div>
+          <div class="stat-value">${item.value}</div>
+        </div>
+      `).join('');
+
+      const list = document.getElementById('test-list');
+      const empty = document.getElementById('test-empty');
+      if (!tests.length) {
+        empty.style.display = 'flex';
+        list.innerHTML = '';
+      } else {
+        empty.style.display = 'none';
+        list.innerHTML = tests.map(t => renderTestRow(t)).join('');
+      }
+
+      renderStatusPanel(tests);
+      renderChart(tests);
+    }
+
+    function getFilteredTests() {
+      const tankId = document.getElementById('tank-filter').value;
+      const search = document.getElementById('search-input').value.trim().toLowerCase();
+      let tests = AquaDB.getTests();
+      if (tankId) tests = tests.filter(t => t.tankId === tankId);
+      if (search) {
+        tests = tests.filter(t => JSON.stringify(t).toLowerCase().includes(search));
+      }
+      return tests;
+    }
+
+    function renderTestRow(test) {
+      const tank = AquaDB.getTank(test.tankId);
+      const status = getTestStatus(test);
+      return `
+        <div class="card card-sm" style="padding:14px 16px">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+            <div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+                <span class="badge ${status.badge}">${status.label}</span>
+                <span class="badge badge-unknown">${tank?.name || 'Deleted Tank'}</span>
+              </div>
+              <div style="font-weight:700">${AquaDB.formatDate(test.date)}</div>
+              <div class="page-subtitle" style="margin-top:4px">${test.notes || 'No notes recorded.'}</div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="deleteTest('${test.id}')">Delete</button>
+          </div>
+          <div class="grid-4" style="margin-top:14px">
+            ${miniMetric('pH', test.ph)}
+            ${miniMetric('Temp', test.temp, tank?.tempUnit || '°F')}
+            ${miniMetric('Ammonia', test.ammonia, 'ppm')}
+            ${miniMetric('Nitrate', test.nitrate, 'ppm')}
+          </div>
+        </div>
+      `;
+    }
+
+    function miniMetric(label, value, unit = '') {
+      return `
+        <div class="card card-sm" style="padding:12px 14px">
+          <div class="stat-label">${label}</div>
+          <div class="stat-value" style="font-size:20px">${value ?? '—'}${unit ? `<span class="stat-unit"> ${unit}</span>` : ''}</div>
+        </div>
+      `;
+    }
+
+    function getTestStatus(test) {
+      const statuses = ['ph','ammonia','nitrate','nitrite'].map(p => test[p] !== undefined && test[p] !== '' ? AquaDB.getParamStatus(p, test[p]) : 'unknown');
+      if (statuses.includes('danger')) return { badge: 'badge-danger', label: 'Alert' };
+      if (statuses.includes('warn')) return { badge: 'badge-warn', label: 'Watch' };
+      if (statuses.includes('low')) return { badge: 'badge-low', label: 'Low' };
+      return { badge: 'badge-ok', label: 'Stable' };
+    }
+
+    function renderStatusPanel(tests) {
+      const panel = document.getElementById('status-panel');
+      const latest = tests[0];
+      if (!latest) {
+        panel.innerHTML = `<div class="empty-state" style="padding:30px 20px"><div class="empty-icon">🧪</div><div class="empty-title">No readings</div><div class="empty-desc">Log a reading to see health status and trends.</div></div>`;
+        return;
+      }
+      panel.innerHTML = `
+        <div class="card card-sm" style="margin-bottom:12px">
+          <div class="stat-label">Latest</div>
+          <div style="font-weight:700;margin-top:4px">${AquaDB.formatDateTime(latest.date)}</div>
+          <div class="page-subtitle" style="margin-top:6px">${latest.notes || 'No notes recorded.'}</div>
+        </div>
+        <div class="grid-2">
+          ${miniMetric('pH', latest.ph)}
+          ${miniMetric('Ammonia', latest.ammonia, 'ppm')}
+        </div>
+      `;
+    }
+
+    function renderChart(tests) {
+      const canvas = document.getElementById('trend-chart');
+      if (chart) {
+        chart.destroy();
+        chart = null;
+      }
+      if (!tests.length || !canvas) return;
+      const ctx = canvas.getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: tests.slice().reverse().map(t => AquaDB.formatDate(t.date)),
+          datasets: [
+            { label: 'pH', data: tests.slice().reverse().map(t => t.ph), borderColor: '#1f8a70', backgroundColor: 'rgba(31,138,112,0.08)', tension: 0.35, pointRadius: 3 },
+            { label: 'Nitrate', data: tests.slice().reverse().map(t => t.nitrate), borderColor: '#b77d22', backgroundColor: 'rgba(183,125,34,0.08)', tension: 0.35, pointRadius: 3 }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: '#a5cfd8', font: { family: 'Manrope', size: 12 } } } },
+          scales: {
+            x: { ticks: { color: '#6f9aa5' }, grid: { color: 'rgba(126,214,220,0.08)' } },
+            y: { ticks: { color: '#6f9aa5' }, grid: { color: 'rgba(126,214,220,0.08)' } }
+          }
+        }
+      });
+    }
+
+    function openTestModal() {
+      if (!AquaDB.getTanks().length) {
+        toast('Add a tank first.', 'err');
+        return;
+      }
+      document.getElementById('test-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('test-tank').value = document.getElementById('tank-filter').value || urlTank || AquaDB.getTanks()[0].id;
+      document.getElementById('test-modal').classList.add('open');
+    }
+
+    function closeTestModal() {
+      document.getElementById('test-modal').classList.remove('open');
+    }
+
+    function saveTest() {
+      const tankId = document.getElementById('test-tank').value;
+      if (!tankId) { toast('Select a tank.', 'err'); return; }
+      AquaDB.addTest({
+        tankId,
+        date: document.getElementById('test-date').value || new Date().toISOString(),
+        ph: document.getElementById('test-ph').value.trim(),
+        temp: document.getElementById('test-temp').value.trim(),
+        ammonia: document.getElementById('test-ammonia').value.trim(),
+        nitrite: document.getElementById('test-nitrite').value.trim(),
+        nitrate: document.getElementById('test-nitrate').value.trim(),
+        gh: document.getElementById('test-gh').value.trim(),
+        notes: document.getElementById('test-notes').value.trim(),
+      });
+      closeTestModal();
+      ['test-ph','test-temp','test-ammonia','test-nitrite','test-nitrate','test-gh','test-notes'].forEach(id => document.getElementById(id).value = '');
+      toast('Reading saved.');
+      loadTests();
+    }
+
+    function deleteTest(id) {
+      if (!confirm('Delete this water test?')) return;
+      AquaDB.deleteTest(id);
+      toast('Reading deleted.');
+      loadTests();
+    }
+
+    document.getElementById('tank-filter').addEventListener('change', loadTests);
+    document.getElementById('search-input').addEventListener('input', loadTests);
+
+    populateTankSelects();
+    loadTests();
+  </script>
+</body>
+</html>

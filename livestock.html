@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AquaLog - Livestock</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .livestock-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .tank-tab-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+    .tank-tab {
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      color: var(--text2);
+      cursor: pointer;
+      transition: all 0.16s ease;
+    }
+    .tank-tab.active {
+      background: rgba(103,216,214,0.14);
+      color: var(--accent3);
+      border-color: rgba(103,216,214,0.34);
+      box-shadow: 0 10px 24px rgba(22,148,171,0.14);
+    }
+    .stocking-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 1fr 0.8fr;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .meter-card { display: flex; flex-direction: column; gap: 10px; }
+    .meter-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .meter {
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(4,20,29,0.58);
+      border: 1px solid rgba(126,214,220,0.12);
+    }
+    .meter-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent3), var(--accent2));
+      width: 0%;
+      transition: width 0.28s ease;
+    }
+    .meter-fill.warn { background: linear-gradient(90deg, var(--warn), #db8c34); }
+    .meter-fill.danger { background: linear-gradient(90deg, var(--danger), #e04545); }
+    .score-row { display: flex; justify-content: space-between; gap: 10px; color: var(--text3); font-size: 12px; }
+    .livestock-layout {
+      display: grid;
+      grid-template-columns: minmax(340px, 0.95fr) minmax(420px, 1.25fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .panel-stack { display: flex; flex-direction: column; gap: 16px; }
+    .panel-title-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .panel-title { font-family: 'DM Serif Display', serif; font-size: 21px; }
+    .catalog-toolbar {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .catalog-toolbar-secondary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .catalog-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 690px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .catalog-item {
+      width: 100%;
+      text-align: left;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid rgba(126,214,220,0.11);
+      border-radius: 18px;
+      background: rgba(4,20,29,0.28);
+      color: var(--text);
+      padding: 12px;
+      cursor: pointer;
+      transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+    }
+    .catalog-item:hover,
+    .catalog-item.active {
+      transform: translateY(-1px);
+      border-color: rgba(140,240,234,0.34);
+      background: rgba(103,216,214,0.08);
+    }
+    .category-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      color: #042531;
+      font-size: 11px;
+      font-weight: 900;
+      background: linear-gradient(145deg, var(--accent3), var(--accent2));
+      box-shadow: 0 10px 22px rgba(22,148,171,0.22);
+    }
+    .species-name { font-weight: 900; font-size: 14px; }
+    .species-sci { color: var(--text3); font-size: 12px; font-style: italic; margin-top: 2px; }
+    .species-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .catalog-score { text-align: right; color: var(--text3); font-size: 11px; line-height: 1.4; white-space: nowrap; }
+    .detail-hero {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .detail-mark { width: 54px; height: 54px; border-radius: 18px; font-size: 13px; }
+    .detail-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .detail-stat {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px;
+      background: rgba(4,20,29,0.24);
+    }
+    .detail-stat strong { display: block; font-size: 18px; color: var(--text); line-height: 1; }
+    .detail-stat span { display: block; margin-top: 5px; color: var(--text3); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
+    .tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+    .tag {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 9px;
+      color: var(--text2);
+      font-size: 11px;
+      background: rgba(255,255,255,0.03);
+    }
+    .add-strip {
+      display: grid;
+      grid-template-columns: 90px 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .warning-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .warning-item {
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(241,191,112,0.10);
+      border: 1px solid rgba(241,191,112,0.22);
+      color: var(--warn);
+      font-size: 12px;
+    }
+    .good-item {
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(103,216,214,0.10);
+      border: 1px solid rgba(103,216,214,0.22);
+      color: var(--accent3);
+      font-size: 12px;
+    }
+    .stock-list { display: flex; flex-direction: column; gap: 10px; }
+    .stock-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid rgba(126,214,220,0.10);
+      background: rgba(4,20,29,0.22);
+      border-radius: 18px;
+      padding: 12px;
+    }
+    .stock-actions { display: flex; align-items: center; gap: 6px; }
+    .qty-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 900;
+    }
+    .qty-pill {
+      min-width: 36px;
+      text-align: center;
+      border-radius: 999px;
+      padding: 5px 8px;
+      color: var(--accent3);
+      background: rgba(103,216,214,0.10);
+      border: 1px solid rgba(103,216,214,0.18);
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .alert-card-list { display: flex; flex-direction: column; gap: 10px; }
+    .alert-card {
+      border: 1px solid rgba(241,191,112,0.20);
+      background: rgba(241,191,112,0.08);
+      color: var(--warn);
+      border-radius: 16px;
+      padding: 12px;
+      font-size: 12px;
+    }
+    .muted-line { color: var(--text3); font-size: 12px; }
+    .empty-tight { padding: 26px 14px; text-align: center; color: var(--text3); font-size: 13px; }
+    @media (max-width: 1120px) {
+      .stocking-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .livestock-layout { grid-template-columns: 1fr; }
+      .catalog-list { max-height: 520px; }
+    }
+    @media (max-width: 700px) {
+      .stocking-grid,
+      .catalog-toolbar,
+      .catalog-toolbar-secondary,
+      .detail-stats,
+      .add-strip { grid-template-columns: 1fr; }
+      .catalog-item,
+      .stock-row { grid-template-columns: 1fr; }
+      .catalog-score { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <div id="nav-mount"></div>
+    <main class="main-content">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Livestock</h1>
+          <p class="page-subtitle">Search a built-in aquarium species catalog, add animals quickly, and manage stocking pressure with bioload and adult-size scores.</p>
+        </div>
+        <div class="livestock-actions">
+          <button class="btn btn-secondary" onclick="clearCatalogFilters()">Clear Filters</button>
+          <button class="btn btn-primary" onclick="openManualModal()">Custom Entry</button>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <div id="no-tanks-msg" style="display:none" class="card">
+          <p style="font-size:14px;color:var(--text2)">No tanks found. <a href="tanks.html" style="color:var(--accent)">Add a tank first</a> to start stocking.</p>
+        </div>
+
+        <div id="main-view">
+          <div class="tank-tab-bar" id="tank-tabs"></div>
+          <div class="stocking-grid" id="stocking-summary"></div>
+
+          <div class="livestock-layout">
+            <section class="card">
+              <div class="panel-title-row">
+                <div>
+                  <div class="panel-title">Species Catalog</div>
+                  <div class="muted-line" id="catalog-count"></div>
+                </div>
+              </div>
+
+              <div class="catalog-toolbar">
+                <input class="form-input" id="catalog-search" placeholder="Search fish, shrimp, snails, corals...">
+                <select class="form-select" id="catalog-category"></select>
+                <select class="form-select" id="catalog-environment"></select>
+              </div>
+              <div class="catalog-toolbar-secondary">
+                <select class="form-select" id="catalog-difficulty"></select>
+                <select class="form-select" id="catalog-fit">
+                  <option value="all">All suitability</option>
+                  <option value="fits">Fits active tank</option>
+                  <option value="warnings">Has warnings</option>
+                </select>
+              </div>
+
+              <div class="catalog-list" id="catalog-results"></div>
+            </section>
+
+            <div class="panel-stack">
+              <section class="card" id="species-detail"></section>
+              <section class="card">
+                <div class="panel-title-row">
+                  <div>
+                    <div class="panel-title">Current Stock</div>
+                    <div class="muted-line" id="stock-count"></div>
+                  </div>
+                  <button class="btn btn-secondary btn-sm" onclick="openManualModal()">Add Custom</button>
+                </div>
+                <div class="stock-list" id="current-stock"></div>
+              </section>
+              <section class="card">
+                <div class="panel-title-row">
+                  <div>
+                    <div class="panel-title">Care Alerts</div>
+                    <div class="muted-line">Tank fit, group size, and current water parameter checks.</div>
+                  </div>
+                </div>
+                <div class="alert-card-list" id="care-alerts"></div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="manual-modal">
+    <div class="modal" style="max-width:620px">
+      <div class="modal-header">
+        <h2 class="modal-title">Custom Livestock Entry</h2>
+        <button class="btn-icon" onclick="closeManualModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Tank *</label>
+            <select class="form-select" id="manual-tank"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select class="form-select" id="manual-category">
+              <option>Fish</option>
+              <option>Shrimp</option>
+              <option>Snail</option>
+              <option>Crab</option>
+              <option>Crayfish</option>
+              <option>Invertebrate</option>
+              <option>Coral</option>
+              <option>Plant</option>
+              <option>Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Common Name *</label>
+            <input class="form-input" id="manual-name" placeholder="e.g. Neon Tetra">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Scientific Name</label>
+            <input class="form-input" id="manual-species" placeholder="e.g. Paracheirodon innesi">
+          </div>
+        </div>
+        <div class="grid-3">
+          <div class="form-group">
+            <label class="form-label">Quantity</label>
+            <input type="number" class="form-input" id="manual-qty" min="1" value="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Adult Size (in)</label>
+            <input type="number" class="form-input" id="manual-size" min="0" step="0.1" placeholder="2.0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date Added</label>
+            <input type="date" class="form-input" id="manual-date">
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Bioload Score</label>
+            <input type="number" class="form-input" id="manual-bioload" min="0" step="0.1" placeholder="Defaults from size">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Size Score</label>
+            <input type="number" class="form-input" id="manual-size-score" min="0" step="0.1" placeholder="Defaults from adult size">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Source / Store</label>
+          <input class="form-input" id="manual-source" placeholder="Local fish store, breeder, frag swap...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-textarea" id="manual-notes" placeholder="Behavior, diet, quarantine, special care..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeManualModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveManualLivestock()">Save Entry</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="nav.js"></script>
+  <script>
+    if (!AquaDB.requireAuth()) throw '';
+    document.getElementById('nav-mount').innerHTML = renderNav('livestock');
+
+    const catalog = AquaDB.getSpeciesCatalog();
+    const today = new Date().toISOString().split('T')[0];
+    const urlTank = new URLSearchParams(location.search).get('tank');
+    let activeTankId = urlTank || null;
+    let selectedSpeciesId = catalog[0]?.id || null;
+    let detailQty = 1;
+
+    const categoryMarks = {
+      Fish: 'F',
+      Shrimp: 'SH',
+      Snail: 'SN',
+      Crab: 'CR',
+      Crayfish: 'CY',
+      Invertebrate: 'IV',
+      Coral: 'CO',
+      Plant: 'PL',
+      Other: 'OT'
+    };
+
+    function init() {
+      const tanks = AquaDB.getTanks();
+      if (!tanks.length) {
+        document.getElementById('no-tanks-msg').style.display = 'block';
+        document.getElementById('main-view').style.display = 'none';
+        return;
+      }
+      if (!activeTankId || !AquaDB.getTank(activeTankId)) activeTankId = tanks[0].id;
+      populateControls(tanks);
+      renderAll();
+    }
+
+    function populateControls(tanks) {
+      document.getElementById('manual-date').value = today;
+      document.getElementById('manual-tank').innerHTML = tanks.map(t =>
+        `<option value="${escapeHtml(t.id)}" ${t.id === activeTankId ? 'selected' : ''}>${escapeHtml(t.name)}</option>`
+      ).join('');
+
+      const categories = unique(catalog.map(s => s.category)).sort();
+      const environments = unique(catalog.map(s => s.environment)).sort();
+      const difficulties = unique(catalog.map(s => s.difficulty)).sort();
+
+      setSelectOptions('catalog-category', 'All categories', categories);
+      setSelectOptions('catalog-environment', 'All environments', environments);
+      setSelectOptions('catalog-difficulty', 'All difficulty', difficulties);
+
+      ['catalog-search','catalog-category','catalog-environment','catalog-difficulty','catalog-fit'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el.dataset.bound === '1') return;
+        el.dataset.bound = '1';
+        el.addEventListener(id === 'catalog-search' ? 'input' : 'change', renderCatalog);
+      });
+    }
+
+    function setSelectOptions(id, label, options) {
+      document.getElementById(id).innerHTML = `<option value="">${label}</option>` +
+        options.map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join('');
+    }
+
+    function renderAll() {
+      renderTankTabs();
+      renderStockingSummary();
+      renderCatalog();
+      renderSpeciesDetail();
+      renderCurrentStock();
+      renderCareAlerts();
+    }
+
+    function renderTankTabs() {
+      const tanks = AquaDB.getTanks();
+      document.getElementById('tank-tabs').innerHTML = tanks.map(t => `
+        <button class="tank-tab ${t.id === activeTankId ? 'active' : ''}" onclick="switchTank('${escapeJs(t.id)}')">
+          ${escapeHtml(t.name)}
+        </button>`).join('');
+    }
+
+    function switchTank(id) {
+      activeTankId = id;
+      history.replaceState(null, '', `livestock.html?tank=${encodeURIComponent(id)}`);
+      document.getElementById('manual-tank').value = id;
+      renderAll();
+    }
+
+    function renderStockingSummary() {
+      const summary = AquaDB.getStockingSummary(activeTankId);
+      const entries = AquaDB.getLivestockForTank(activeTankId).length;
+      const gallons = summary.gallons ? `${round(summary.gallons)} gal` : 'No volume';
+      document.getElementById('stocking-summary').innerHTML = `
+        <div class="card meter-card">
+          <div class="meter-head">
+            <div>
+              <div class="stat-label">Stocking Status</div>
+              <div class="stat-value" style="font-size:28px">${summary.status.label}</div>
+            </div>
+            <span class="badge ${summary.status.badge}">${summary.percent}%</span>
+          </div>
+          <div class="muted-line">${gallons} ${summary.environment.toLowerCase()} capacity model</div>
+        </div>
+        ${meterCard('Bioload', summary.bioload, summary.bioloadCapacity, summary.bioloadPercent)}
+        ${meterCard('Adult Size', summary.size, summary.sizeCapacity, summary.sizePercent)}
+        <div class="card meter-card">
+          <div class="stat-label">Inventory</div>
+          <div class="stat-value" style="font-size:28px">${summary.count}</div>
+          <div class="muted-line">${entries} entries in this tank</div>
+        </div>`;
+    }
+
+    function meterCard(label, value, capacity, percent) {
+      const tone = percent >= 110 ? 'danger' : percent >= 70 ? 'warn' : '';
+      return `
+        <div class="card meter-card">
+          <div class="meter-head">
+            <div class="stat-label">${label}</div>
+            <strong>${percent}%</strong>
+          </div>
+          <div class="meter"><div class="meter-fill ${tone}" style="width:${Math.min(percent, 140)}%"></div></div>
+          <div class="score-row">
+            <span>${round(value)} used</span>
+            <span>${round(capacity)} budget</span>
+          </div>
+        </div>`;
+    }
+
+    function renderCatalog() {
+      const search = document.getElementById('catalog-search').value.trim().toLowerCase();
+      const category = document.getElementById('catalog-category').value;
+      const environment = document.getElementById('catalog-environment').value;
+      const difficulty = document.getElementById('catalog-difficulty').value;
+      const fit = document.getElementById('catalog-fit').value;
+      const tank = AquaDB.getTank(activeTankId);
+
+      let results = catalog.filter(s => {
+        const haystack = [s.commonName, s.scientificName, s.category, s.environment, s.difficulty, s.temperament, s.diet, s.zone, s.notes, ...s.tags].join(' ').toLowerCase();
+        if (search && !haystack.includes(search)) return false;
+        if (category && s.category !== category) return false;
+        if (environment && s.environment !== environment) return false;
+        if (difficulty && s.difficulty !== difficulty) return false;
+        if (fit !== 'all') {
+          const plannedQty = Math.max(1, s.minGroup || 1);
+          const warnings = AquaDB.getSpeciesWarnings(activeTankId, s, plannedQty);
+          const hasWarnings = warnings.length > 0;
+          if (fit === 'fits' && hasWarnings) return false;
+          if (fit === 'warnings' && !hasWarnings) return false;
+        }
+        return true;
+      });
+
+      results = results.sort((a, b) => {
+        const tankEnv = AquaDB.getTankEnvironment(tank);
+        const aFit = a.environment === tankEnv ? 0 : 1;
+        const bFit = b.environment === tankEnv ? 0 : 1;
+        if (aFit !== bFit) return aFit - bFit;
+        return a.commonName.localeCompare(b.commonName);
+      });
+
+      document.getElementById('catalog-count').textContent = `${results.length} of ${catalog.length} catalog species shown`;
+      document.getElementById('catalog-results').innerHTML = results.length ? results.map(s => catalogItem(s)).join('') :
+        `<div class="empty-tight">No species match the current filters.</div>`;
+
+      if (!results.some(s => s.id === selectedSpeciesId) && results[0]) {
+        selectedSpeciesId = results[0].id;
+        detailQty = Math.max(1, results[0].minGroup || 1);
+        renderSpeciesDetail();
+      }
+    }
+
+    function catalogItem(s) {
+      const warnings = AquaDB.getSpeciesWarnings(activeTankId, s, Math.max(1, s.minGroup || 1));
+      const badge = warnings.length ? 'badge-warn' : 'badge-ok';
+      const label = warnings.length ? 'Review' : 'Fit';
+      return `
+        <button class="catalog-item ${s.id === selectedSpeciesId ? 'active' : ''}" onclick="selectSpecies('${escapeJs(s.id)}')">
+          <div class="category-mark">${categoryMarks[s.category] || 'OT'}</div>
+          <div>
+            <div class="species-name">${escapeHtml(s.commonName)}</div>
+            <div class="species-sci">${escapeHtml(s.scientificName)}</div>
+            <div class="species-meta">
+              <span class="badge badge-unknown">${escapeHtml(s.category)}</span>
+              <span class="badge badge-unknown">${escapeHtml(s.environment)}</span>
+              <span class="badge ${badge}">${label}</span>
+            </div>
+          </div>
+          <div class="catalog-score">
+            Bio ${round(s.bioloadScore)}<br>
+            Size ${round(s.sizeScore)}
+          </div>
+        </button>`;
+    }
+
+    function selectSpecies(id) {
+      selectedSpeciesId = id;
+      const species = AquaDB.getSpeciesById(id);
+      detailQty = Math.max(1, species?.minGroup || 1);
+      renderCatalog();
+      renderSpeciesDetail();
+    }
+
+    function renderSpeciesDetail() {
+      const species = AquaDB.getSpeciesById(selectedSpeciesId);
+      const detail = document.getElementById('species-detail');
+      if (!species) {
+        detail.innerHTML = `<div class="empty-tight">Select a species to see care and stocking details.</div>`;
+        return;
+      }
+
+      detail.innerHTML = `
+        <div class="detail-hero">
+          <div class="category-mark detail-mark">${categoryMarks[species.category] || 'OT'}</div>
+          <div>
+            <div class="panel-title">${escapeHtml(species.commonName)}</div>
+            <div class="species-sci">${escapeHtml(species.scientificName)}</div>
+            <div class="tag-row">
+              <span class="tag">${escapeHtml(species.category)}</span>
+              <span class="tag">${escapeHtml(species.environment)}</span>
+              <span class="tag">${escapeHtml(species.difficulty)}</span>
+              <span class="tag">${escapeHtml(species.temperament)}</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="page-subtitle" style="margin:0">${escapeHtml(species.notes)}</p>
+
+        <div class="detail-stats">
+          ${detailStat(species.adultSizeIn, 'Adult in')}
+          ${detailStat(species.minTankGal, 'Min gal')}
+          ${detailStat(species.bioloadScore, 'Bioload')}
+          ${detailStat(species.sizeScore, 'Size score')}
+        </div>
+
+        <div class="grid-2">
+          <div class="detail-stat">
+            <strong>${species.tempMin}-${species.tempMax}</strong>
+            <span>Temp range</span>
+          </div>
+          <div class="detail-stat">
+            <strong>${species.phMin}-${species.phMax}</strong>
+            <span>pH range</span>
+          </div>
+        </div>
+
+        <div class="tag-row">
+          <span class="tag">${escapeHtml(species.social)}${species.minGroup > 1 ? ` of ${species.minGroup}+` : ''}</span>
+          <span class="tag">${escapeHtml(species.diet)}</span>
+          <span class="tag">${escapeHtml(species.zone)}</span>
+          ${species.tags.slice(0, 6).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+        </div>
+
+        <div class="add-strip">
+          <div class="form-group">
+            <label class="form-label">Qty</label>
+            <input type="number" class="form-input" id="detail-qty" min="1" value="${detailQty}" oninput="updateDetailQty(this.value)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input type="date" class="form-input" id="detail-date" value="${today}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Source</label>
+            <input class="form-input" id="detail-source" placeholder="Optional">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:10px">
+          <label class="form-label">Notes</label>
+          <textarea class="form-textarea" id="detail-notes" placeholder="Quarantine, sex ratio, morph, purchase notes..."></textarea>
+        </div>
+
+        <div id="species-preview"></div>
+
+        <button class="btn btn-primary" onclick="addSelectedSpecies()" style="width:100%;justify-content:center;margin-top:14px">Add Selected Species</button>`;
+
+      renderSpeciesPreview();
+    }
+
+    function detailStat(value, label) {
+      return `<div class="detail-stat"><strong>${round(value)}</strong><span>${label}</span></div>`;
+    }
+
+    function updateDetailQty(value) {
+      detailQty = Math.max(1, parseInt(value, 10) || 1);
+      renderSpeciesPreview();
+    }
+
+    function renderSpeciesPreview() {
+      const species = AquaDB.getSpeciesById(selectedSpeciesId);
+      const preview = document.getElementById('species-preview');
+      if (!species || !preview) return;
+      const qty = Math.max(1, parseInt(document.getElementById('detail-qty')?.value, 10) || detailQty);
+      const warnings = AquaDB.getSpeciesWarnings(activeTankId, species, qty);
+      const projected = AquaDB.getStockingSummary(activeTankId, [{
+        speciesId: species.id,
+        qty,
+        bioloadScore: species.bioloadScore,
+        sizeScore: species.sizeScore,
+        adultSizeIn: species.adultSizeIn
+      }]);
+      preview.innerHTML = `
+        <div style="margin-top:14px">
+          ${meterCard('Projected Stocking After Add', projected.bioload, projected.bioloadCapacity, projected.percent)}
+          <div class="${warnings.length ? 'warning-list' : 'warning-list'}">
+            ${warnings.length ? warnings.map(w => `<div class="warning-item">${escapeHtml(w)}</div>`).join('') : `<div class="good-item">No suitability warnings for the selected quantity and active tank.</div>`}
+          </div>
+        </div>`;
+    }
+
+    function renderCurrentStock() {
+      const livestock = AquaDB.getLivestockForTank(activeTankId);
+      const list = document.getElementById('current-stock');
+      const count = livestock.reduce((sum, item) => sum + (parseInt(item.qty, 10) || 1), 0);
+      document.getElementById('stock-count').textContent = `${count} individuals across ${livestock.length} entries`;
+
+      if (!livestock.length) {
+        list.innerHTML = `<div class="empty-tight">No livestock added to this tank yet. Select a catalog species or add a custom entry.</div>`;
+        return;
+      }
+
+      list.innerHTML = livestock.map(item => stockItem(item)).join('');
+    }
+
+    function stockItem(item) {
+      const metrics = AquaDB.getLivestockMetrics(item);
+      const species = metrics.species;
+      const name = item.name || species?.commonName || 'Unknown';
+      const sci = item.species || species?.scientificName || '';
+      const category = item.category || species?.category || 'Other';
+      const bio = metrics.bioloadScore * metrics.qty;
+      const size = metrics.sizeScore * metrics.qty;
+      return `
+        <div class="stock-row">
+          <div class="category-mark">${categoryMarks[category] || 'OT'}</div>
+          <div>
+            <div class="species-name">${escapeHtml(name)}</div>
+            ${sci ? `<div class="species-sci">${escapeHtml(sci)}</div>` : ''}
+            <div class="species-meta">
+              <span class="badge badge-unknown">${escapeHtml(category)}</span>
+              <span class="badge badge-ok">Bio ${round(bio)}</span>
+              <span class="badge badge-ok">Size ${round(size)}</span>
+              ${item.source ? `<span class="badge badge-unknown">${escapeHtml(item.source)}</span>` : ''}
+            </div>
+          </div>
+          <div class="stock-actions">
+            <button class="qty-btn" onclick="adjustQty('${escapeJs(item.id)}', -1)">-</button>
+            <span class="qty-pill">${metrics.qty}</span>
+            <button class="qty-btn" onclick="adjustQty('${escapeJs(item.id)}', 1)">+</button>
+            <button class="btn btn-danger btn-sm" onclick="removeLivestock('${escapeJs(item.id)}')">Remove</button>
+          </div>
+        </div>`;
+    }
+
+    function renderCareAlerts() {
+      const livestock = AquaDB.getLivestockForTank(activeTankId);
+      const alerts = [];
+      livestock.forEach((item) => {
+        const metrics = AquaDB.getLivestockMetrics(item);
+        const species = metrics.species;
+        if (!species) return;
+        const warnings = AquaDB.getSpeciesWarnings(activeTankId, species, 0).filter(w => !w.startsWith('Projected stocking'));
+        warnings.forEach(w => alerts.push(`<strong>${escapeHtml(species.commonName)}:</strong> ${escapeHtml(w)}`));
+      });
+
+      document.getElementById('care-alerts').innerHTML = alerts.length ?
+        alerts.slice(0, 10).map(alert => `<div class="alert-card">${alert}</div>`).join('') :
+        `<div class="good-item">No care alerts for current catalog-linked livestock.</div>`;
+    }
+
+    function addSelectedSpecies() {
+      const species = AquaDB.getSpeciesById(selectedSpeciesId);
+      if (!species) return;
+      const qty = Math.max(1, parseInt(document.getElementById('detail-qty').value, 10) || 1);
+      AquaDB.addLivestock({
+        tankId: activeTankId,
+        speciesId: species.id,
+        name: species.commonName,
+        species: species.scientificName,
+        qty,
+        category: species.category,
+        source: document.getElementById('detail-source').value.trim(),
+        notes: document.getElementById('detail-notes').value.trim(),
+        addedAt: document.getElementById('detail-date').value || new Date().toISOString(),
+        adultSizeIn: species.adultSizeIn,
+        minTankGal: species.minTankGal,
+        bioloadScore: species.bioloadScore,
+        sizeScore: species.sizeScore,
+        environment: species.environment,
+        difficulty: species.difficulty
+      });
+      document.getElementById('detail-source').value = '';
+      document.getElementById('detail-notes').value = '';
+      toast(`${species.commonName} added.`);
+      renderAll();
+    }
+
+    function adjustQty(id, delta) {
+      const livestock = AquaDB.getLivestock();
+      const item = livestock.find(l => l.id === id);
+      if (!item) return;
+      const current = Math.max(1, parseInt(item.qty, 10) || 1);
+      const next = current + delta;
+      if (next <= 0) {
+        removeLivestock(id);
+        return;
+      }
+      item.qty = next;
+      AquaDB.saveLivestock(livestock);
+      renderAll();
+    }
+
+    function removeLivestock(id) {
+      const item = AquaDB.getLivestock().find(l => l.id === id);
+      if (!item) return;
+      if (!confirm(`Remove "${item.name || 'this entry'}" from the tank?`)) return;
+      AquaDB.deleteLivestock(id);
+      toast('Livestock removed.');
+      renderAll();
+    }
+
+    function openManualModal() {
+      document.getElementById('manual-modal').classList.add('open');
+      document.getElementById('manual-tank').value = activeTankId;
+      document.getElementById('manual-date').value = today;
+    }
+
+    function closeManualModal() {
+      document.getElementById('manual-modal').classList.remove('open');
+    }
+
+    function saveManualLivestock() {
+      const name = document.getElementById('manual-name').value.trim();
+      if (!name) { toast('Common name is required.', 'err'); return; }
+      const adultSize = parseFloat(document.getElementById('manual-size').value);
+      const bioload = parseFloat(document.getElementById('manual-bioload').value);
+      const sizeScore = parseFloat(document.getElementById('manual-size-score').value);
+      const tankId = document.getElementById('manual-tank').value;
+      AquaDB.addLivestock({
+        tankId,
+        name,
+        species: document.getElementById('manual-species').value.trim(),
+        qty: Math.max(1, parseInt(document.getElementById('manual-qty').value, 10) || 1),
+        category: document.getElementById('manual-category').value,
+        source: document.getElementById('manual-source').value.trim(),
+        notes: document.getElementById('manual-notes').value.trim(),
+        addedAt: document.getElementById('manual-date').value || new Date().toISOString(),
+        adultSizeIn: isFinite(adultSize) ? adultSize : '',
+        bioloadScore: isFinite(bioload) ? bioload : '',
+        sizeScore: isFinite(sizeScore) ? sizeScore : ''
+      });
+
+      ['manual-name','manual-species','manual-size','manual-bioload','manual-size-score','manual-source','manual-notes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('manual-qty').value = '1';
+      closeManualModal();
+      activeTankId = tankId;
+      toast('Custom livestock saved.');
+      renderAll();
+    }
+
+    function clearCatalogFilters() {
+      document.getElementById('catalog-search').value = '';
+      document.getElementById('catalog-category').value = '';
+      document.getElementById('catalog-environment').value = '';
+      document.getElementById('catalog-difficulty').value = '';
+      document.getElementById('catalog-fit').value = 'all';
+      renderCatalog();
+    }
+
+    function unique(values) {
+      return [...new Set(values.filter(Boolean))];
+    }
+
+    function round(value) {
+      const number = parseFloat(value);
+      if (!isFinite(number)) return '0';
+      return Math.round(number * 10) / 10;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      }[char]));
+    }
+
+    function escapeJs(value) {
+      return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
+    init();
+  </script>
+</body>
+</html>
